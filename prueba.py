@@ -5,10 +5,6 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.model_selection import train_test_split
-import spacy
-
-# Cargar el modelo de NLP de SpaCy
-nlp = spacy.load("en_core_web_sm")
 
 # Conectar o crear una base de datos SQLite
 def create_database():
@@ -27,14 +23,12 @@ def create_database():
     )
     ''')
     
-    # Insertar datos de ejemplo
-    cursor.execute('''INSERT OR IGNORE INTO restaurants VALUES 
-        (1, 'Burger Joint', 'hamburguesas', 'bajo', 'Centro', 4.5),
-        (2, 'Tacos El Güero', 'tacos', 'bajo', 'Oriente', 4.7),
-        (3, 'Sushi Master', 'sushi', 'alto', 'Norte', 4.3),
-        (4, 'Pizza Loca', 'pizza', 'medio', 'Sur', 4.2),
-        (5, 'El Asadero', 'carnes', 'medio', 'Centro', 4.6)
-    ''')
+    # Insertar datos actualizados
+    cursor.execute('''DELETE FROM restaurants''')  # Eliminar datos previos si existen
+    cursor.executemany('''INSERT INTO restaurants (id, name, cuisine, price_range, location, rating) VALUES (?, ?, ?, ?, ?, ?)''', [
+        (1, 'Mochomos Torreon', 'Mexicana', 'alto', 'Boulevard Independencia, Torreon', 5.0),
+        (2, 'The Mezquite', 'Mexicana', 'bajo', 'Avenida Mariano Abasolo, Torreon', 5.0)
+    ])
     
     connection.commit()
     connection.close()
@@ -57,11 +51,8 @@ class IntentClassifier(nn.Module):
 def prepare_training_data():
     # Datos de ejemplo para entrenamiento
     examples = [
-        ("Quiero una hamburguesa barata", "hamburguesas", "bajo"),
-        ("Busco tacos económicos", "tacos", "bajo"),
-        ("Quiero sushi caro", "sushi", "alto"),
-        ("Pizza a precio medio", "pizza", "medio"),
-        ("Carne a la parrilla económica", "carnes", "bajo")
+        ("Quiero algo mexicano y caro", "Mexicana", "alto"),
+        ("Busco comida mexicana a precio medio", "Mexicana", "medio")
     ]
 
     texts = [example[0] for example in examples]
@@ -71,7 +62,7 @@ def prepare_training_data():
     vectorizer = CountVectorizer()
     X = vectorizer.fit_transform(texts).toarray()
 
-    cuisine_mapping = {"hamburguesas": 0, "tacos": 1, "sushi": 2, "pizza": 3, "carnes": 4}
+    cuisine_mapping = {"Mexicana": 0}
     price_mapping = {"bajo": 0, "medio": 1, "alto": 2}
 
     y_cuisine = [cuisine_mapping[c] for c in cuisines]
@@ -83,8 +74,8 @@ def prepare_training_data():
 def train_model():
     X, y_cuisine, y_price, vectorizer, cuisine_mapping, price_mapping = prepare_training_data()
     
-    X_train, X_test, y_cuisine_train, y_cuisine_test = train_test_split(X, y_cuisine, test_size=0.2, random_state=42)
-    X_train, X_test, y_price_train, y_price_test = train_test_split(X, y_price, test_size=0.2, random_state=42)
+    X_train, _, y_cuisine_train, _ = train_test_split(X, y_cuisine, test_size=0.2, random_state=42)
+    X_train, _, y_price_train, _ = train_test_split(X, y_price, test_size=0.2, random_state=42)
 
     input_size = X_train.shape[1]
     hidden_size = 16
@@ -98,7 +89,7 @@ def train_model():
     optimizer_cuisine = optim.Adam(model_cuisine.parameters(), lr=0.01)
     optimizer_price = optim.Adam(model_price.parameters(), lr=0.01)
 
-    epochs = 100
+    epochs = 500
     for epoch in range(epochs):
         # Entrenamiento para tipo de comida
         optimizer_cuisine.zero_grad()
